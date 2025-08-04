@@ -417,4 +417,4 @@ For issues and questions:
 
 ---
 
-**Built with ❤️ for intelligent document processing and AI-powered conversations** 
+**Built with ❤️ for intelligent document processing and AI-powered conversations** # Deployment retry - Artifact Registry fixed - Mon Aug  4 20:04:56 IST 2025
