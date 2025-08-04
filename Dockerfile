@@ -10,16 +10,21 @@ RUN apt-get update && apt-get install -y \
     libaio1 \
     wget \
     unzip \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Oracle Instant Client
-RUN wget https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip \
-    && unzip instantclient-basiclite-linuxx64.zip \
-    && mv instantclient_* /opt/oracle/instantclient \
-    && rm instantclient-basiclite-linuxx64.zip
+# Create Oracle directory
+RUN mkdir -p /opt/oracle/instantclient
+
+# Install Oracle Instant Client (using a more reliable method)
+RUN wget -O /tmp/instantclient-basiclite.zip \
+    https://download.oracle.com/otn_software/linux/instantclient/219000/instantclient-basiclite-linux.x64-21.9.0.0.0dbru.zip \
+    && unzip /tmp/instantclient-basiclite.zip -d /opt/oracle/ \
+    && mv /opt/oracle/instantclient_* /opt/oracle/instantclient \
+    && rm /tmp/instantclient-basiclite.zip
 
 # Set Oracle environment variables
-ENV LD_LIBRARY_PATH=/opt/oracle/instantclient:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient
 ENV PATH=/opt/oracle/instantclient:$PATH
 
 # Copy requirements first for better caching
@@ -32,7 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p secrets analysis
+RUN mkdir -p gcp_secrets analysis
 
 # Expose port 8080 (Cloud Run requirement)
 EXPOSE 8080
