@@ -1,0 +1,12 @@
+streamlit
+oracledb>=2.2.0
+PyPDF2
+fastapi
+uvicorn
+python-multipart
+tiktoken
+google-cloud-aiplatform
+requests
+python-dotenv
+pydantic
+pandas
