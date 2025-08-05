@@ -77,11 +77,3 @@ resource "google_cloud_run_service" "smart_chart" {
     latest_revision = true
   }
 }
-
-output "cloud_run_url" {
-  value = google_cloud_run_service.smart_chart.status[0].url
-}
-
-output "cloud_run_service_account" {
-  value = google_service_account.cloud_run_sa.email
-}
