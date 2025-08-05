@@ -1,1 +1,1 @@
-# Testing package for Smart Chart RAG System 
+# Testing package for Smart Chart RAG System

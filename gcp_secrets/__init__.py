@@ -1,1 +1,1 @@
-# Secrets package for Smart Chart RAG System 
+# Secrets package for Smart Chart RAG System
