@@ -5,32 +5,15 @@ provider "google" {
   region  = var.region
 }
 
-# Artifact Registry for Docker images
-resource "google_artifact_registry_repository" "smart_chart" {
+# Artifact Registry for Docker images (already exists)
+data "google_artifact_registry_repository" "smart_chart" {
   location      = var.region
   repository_id = "smart-chart-repo"
-  description   = "Docker repository for Smart Chart RAG application"
-  format        = "DOCKER"
 }
 
-# Service account for Cloud Run
-resource "google_service_account" "cloud_run_sa" {
-  account_id   = "smart-chart-cloud-run"
-  display_name = "Smart Chart Cloud Run Service Account"
-  description  = "Service account for Smart Chart RAG application"
-}
-
-# IAM roles for the service account
-resource "google_project_iam_member" "cloud_run_sa_roles" {
-  for_each = toset([
-    "roles/aiplatform.user",           # Vertex AI access
-    "roles/storage.objectViewer",      # GCS access (if needed)
-    "roles/logging.logWriter",         # Cloud Logging
-    "roles/monitoring.metricWriter"    # Cloud Monitoring
-  ])
-  project = var.project_id
-  role    = each.value
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+# Use existing service account (already exists)
+data "google_service_account" "cloud_run_sa" {
+  account_id = "smart-chart-deploy"
 }
 
 # Cloud Run service
@@ -40,7 +23,7 @@ resource "google_cloud_run_service" "smart_chart" {
 
   template {
     spec {
-      service_account_name = google_service_account.cloud_run_sa.email
+      service_account_name = data.google_service_account.cloud_run_sa.email
       containers {
         image = var.container_image
         ports {
