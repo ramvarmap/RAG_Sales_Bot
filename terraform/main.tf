@@ -71,10 +71,6 @@ resource "google_cloud_run_service" "smart_chart" {
           name  = "VERTEX_EMBEDDING_MODEL"
           value = "text-embedding-005"
         }
-        env {
-          name  = "GOOGLE_APPLICATION_CREDENTIALS"
-          value = "/app/gcp_secrets/llama-sa-key.json"
-        }
         
         resources {
           limits = {

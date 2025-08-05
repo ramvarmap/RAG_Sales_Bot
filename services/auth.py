@@ -20,7 +20,8 @@ def generate_access_token():
             os.getenv('K_SERVICE') or  # Cloud Run
             os.getenv('K_REVISION') or  # Cloud Run
             os.getenv('GOOGLE_CLOUD_PROJECT') or  # GCP environment
-            os.getenv('GCP_PROJECT')  # Alternative GCP project env var
+            os.getenv('GCP_PROJECT') or  # Alternative GCP project env var
+            os.getenv('VERTEX_PROJECT_ID')  # Our custom project ID env var
         )
         
         if is_cloud_run:
