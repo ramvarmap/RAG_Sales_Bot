@@ -82,27 +82,27 @@ gcloud iam service-accounts create smart-chart-deploy \
 # Get the service account email
 SA_EMAIL="smart-chart-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# Grant necessary roles
+# Grant minimal required roles (Least Privilege Principle)
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/run.admin"
+    --role="roles/aiplatform.user"
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/artifactregistry.admin"
+    --role="roles/run.developer"
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/artifactregistry.writer"
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/iam.serviceAccountUser"
 
+# Add storage permissions for Terraform state
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/storage.admin"
-
-# CRITICAL: Add Vertex AI access role
-gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-    --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/aiplatform.user"
+    --role="roles/storage.objectAdmin"
 
 # Create and download service account key
 gcloud iam service-accounts keys create ~/smart-chart-sa-key.json \
@@ -120,6 +120,9 @@ gsutil mb -l us-central1 gs://smart-chart-terraform-state
 
 # Verify bucket creation
 gsutil ls gs://smart-chart-terraform-state
+
+# Configure bucket IAM for Terraform state access
+gsutil iam ch serviceAccount:${SA_EMAIL}:objectAdmin gs://smart-chart-terraform-state
 ```
 
 ### Step 5: Create Artifact Registry Repository
@@ -227,8 +230,9 @@ git push origin testing
 9. ✅ Terraform Plan
 10. ✅ Terraform Apply
 11. ✅ Get Cloud Run URL
+12. ✅ Make Cloud Run Service Public
 
-### Step 9: Make Cloud Run Service Public
+### Step 12: Make Cloud Run Service Public
 
 After successful deployment, make the service publicly accessible:
 
@@ -240,9 +244,9 @@ gcloud run services add-iam-policy-binding smart-chart-rag \
     --role="roles/run.invoker"
 ```
 
-### Step 10: Verify Deployment
+### Step 13: Verify Deployment
 
-#### 10.1 Check Cloud Run Service
+#### 13.1 Check Cloud Run Service
 
 ```bash
 # List Cloud Run services
@@ -255,13 +259,13 @@ gcloud run services describe smart-chart-rag --region=us-central1
 gcloud run services logs read smart-chart-rag --region=us-central1 --limit=50
 ```
 
-#### 10.2 Access Your Application
+#### 13.2 Access Your Application
 
 1. Copy the Cloud Run URL from GitHub Actions output
 2. Open the URL in your browser
 3. You should see your Smart Chart RAG application
 
-#### 10.3 Test Application Features
+#### 13.3 Test Application Features
 
 - ✅ Upload a PDF document
 - ✅ Chat with the AI about the document
@@ -508,6 +512,21 @@ gsutil rm -r gs://smart-chart-terraform-state
 4. **Access Control**: Consider setting up IAM policies for Cloud Run access
 5. **HTTPS**: Cloud Run automatically provides HTTPS endpoints
 6. **Authentication**: Uses Application Default Credentials (ADC) in Cloud Run - no service account keys in containers
+7. **Terraform State**: Stored securely in GCS with modern IAM permissions and state locking
+
+## 📦 Terraform State Security
+
+### **State Storage Configuration:**
+- **Location**: `gs://smart-chart-terraform-state/terraform/state/`
+- **State File**: `default.tfstate`
+- **Locking**: Automatic state locking prevents concurrent modifications
+- **Versioning**: GCS provides automatic versioning and backup
+
+### **Access Control:**
+- **Service Account**: `smart-chart-deploy` has `roles/storage.objectAdmin` on the state bucket
+- **Modern IAM**: Uses modern IAM permissions instead of legacy bucket permissions
+- **Least Privilege**: Only the deployment service account can access state files
+- **Audit Logging**: All state access is logged for security monitoring
 
 ## 📝 Environment Variables
 
@@ -534,8 +553,18 @@ The application uses these environment variables (set via Terraform):
 ### Cloud Run Environment
 - **Method**: Application Default Credentials (ADC)
 - **Service Account**: `smart-chart-deploy@project-id.iam.gserviceaccount.com`
-- **Required Roles**: `roles/aiplatform.user`, `roles/run.admin`, `roles/artifactregistry.admin`
-- **Security**: No service account keys stored in containers
+- **Required Roles**: 
+  - `roles/aiplatform.user` - Vertex AI access for embeddings and LLM
+  - `roles/run.developer` - Deploy and manage Cloud Run services
+  - `roles/artifactregistry.writer` - Push Docker images to Artifact Registry
+  - `roles/iam.serviceAccountUser` - Run operations as service account
+  - `roles/storage.objectAdmin` - Manage Terraform state files in GCS (includes read/write/delete)
+- **Bucket IAM**: Service account also has `objectAdmin` role on the Terraform state bucket
+- **Security**: Least privilege principle - minimal required permissions only
+- **Removed Roles**: 
+  - ❌ `roles/run.admin` - Was overly broad (full Cloud Run control)
+  - ❌ `roles/artifactregistry.admin` - Was overly broad (full Artifact Registry control)
+  - ❌ `roles/storage.admin` - Was overly broad (full GCS control)
 
 ### Local Development
 - **Method**: Service account key file
@@ -555,11 +584,13 @@ Your deployment is successful when:
 
 - ✅ GitHub Actions workflow completes without errors
 - ✅ Cloud Run service shows "Ready" status
+- ✅ Cloud Run service is publicly accessible
 - ✅ Application URL is accessible
 - ✅ You can upload PDFs and chat with the AI
 - ✅ Database operations work correctly
 - ✅ Embedding generation works without errors
 - ✅ Authentication logs show "Using Application Default Credentials for Cloud Run"
+- ✅ Terraform state is securely stored and accessible
 
 ## 📞 Support
 
