@@ -47,21 +47,60 @@ resource "google_cloud_run_service" "smart_chart" {
           container_port = 8080
         }
         # Oracle DB connection env vars
-        env { name = "ORACLE_USERNAME"      value = var.oracle_username }
-        env { name = "ORACLE_PASSWORD"      value = var.oracle_password }
-        env { name = "ORACLE_HOST"          value = var.oracle_host }
-        env { name = "ORACLE_PORT"          value = var.oracle_port }
-        env { name = "ORACLE_SERVICE_NAME"  value = var.oracle_service_name }
+        env {
+          name  = "ORACLE_USERNAME"
+          value = var.oracle_username
+        }
+        env {
+          name  = "ORACLE_PASSWORD"
+          value = var.oracle_password
+        }
+        env {
+          name  = "ORACLE_HOST"
+          value = var.oracle_host
+        }
+        env {
+          name  = "ORACLE_PORT"
+          value = var.oracle_port
+        }
+        env {
+          name  = "ORACLE_SERVICE_NAME"
+          value = var.oracle_service_name
+        }
         # Google AI config
-        env { name = "VERTEX_PROJECT_ID"    value = var.project_id }
-        env { name = "VERTEX_LOCATION"      value = var.region }
-        env { name = "VERTEX_EMBEDDING_MODEL" value = "text-embedding-005" }
+        env {
+          name  = "VERTEX_PROJECT_ID"
+          value = var.project_id
+        }
+        env {
+          name  = "VERTEX_LOCATION"
+          value = var.region
+        }
+        env {
+          name  = "VERTEX_EMBEDDING_MODEL"
+          value = "text-embedding-005"
+        }
         # App config
-        env { name = "TARGET_CHUNK_SIZE"    value = "1500" }
-        env { name = "MAX_CHUNK_SIZE"       value = "2000" }
-        env { name = "OVERLAP_SIZE"         value = "200" }
-        env { name = "MIN_CHUNK_SIZE"       value = "500" }
-        env { name = "DOCUMENT_SIZE_LIMIT"  value = "256000" }
+        env {
+          name  = "TARGET_CHUNK_SIZE"
+          value = "1500"
+        }
+        env {
+          name  = "MAX_CHUNK_SIZE"
+          value = "2000"
+        }
+        env {
+          name  = "OVERLAP_SIZE"
+          value = "200"
+        }
+        env {
+          name  = "MIN_CHUNK_SIZE"
+          value = "500"
+        }
+        env {
+          name  = "DOCUMENT_SIZE_LIMIT"
+          value = "256000"
+        }
         resources {
           limits = {
             cpu    = "2000m"
