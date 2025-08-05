@@ -1,0 +1,21 @@
+# =============================================================================
+# Smart Chart RAG Application - Terraform Variables Example
+# =============================================================================
+# Copy this file to terraform.tfvars and update with your values
+# =============================================================================
+
+# GCP Project Configuration
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+
+# Docker Image Configuration
+# This will be set by GitHub Actions during deployment
+# Format: REGION-docker.pkg.dev/PROJECT_ID/smart-chart-repo/smart-chart:latest
+container_image = "us-central1-docker.pkg.dev/your-gcp-project-id/smart-chart-repo/smart-chart:latest"
+
+# Oracle Database Configuration
+oracle_username     = "VECTOR_USER"
+oracle_password     = "Oracle123"
+oracle_host         = "inflabs.itversity.com"
+oracle_port         = "1521"
+oracle_service_name = "FREEPDB1" 

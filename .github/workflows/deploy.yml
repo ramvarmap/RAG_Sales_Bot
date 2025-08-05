@@ -50,23 +50,32 @@ jobs:
         with:
           terraform_version: "1.5.0"
 
+      - name: Create Terraform Variables File
+        working-directory: ./terraform
+        run: |
+          cat > terraform.tfvars << EOF
+          # GCP Project Configuration
+          project_id = "${{ secrets.GCP_PROJECT_ID }}"
+          region     = "${{ env.REGION }}"
+          
+          # Docker Image Configuration
+          container_image = "${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/smart-chart:${{ github.sha }}"
+          
+          # Oracle Database Configuration
+          oracle_username     = "${{ secrets.ORACLE_USERNAME }}"
+          oracle_password     = "${{ secrets.ORACLE_PASSWORD }}"
+          oracle_host         = "${{ secrets.ORACLE_HOST }}"
+          oracle_port         = "${{ secrets.ORACLE_PORT }}"
+          oracle_service_name = "${{ secrets.ORACLE_SERVICE_NAME }}"
+          EOF
+
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
       - name: Terraform Plan
         working-directory: ./terraform
-        run: |
-          terraform plan \
-            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="region=${{ env.REGION }}" \
-            -var="container_image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/smart-chart:${{ github.sha }}" \
-            -var="oracle_username=${{ secrets.ORACLE_USERNAME }}" \
-            -var="oracle_password=${{ secrets.ORACLE_PASSWORD }}" \
-            -var="oracle_host=${{ secrets.ORACLE_HOST }}" \
-            -var="oracle_port=${{ secrets.ORACLE_PORT }}" \
-            -var="oracle_service_name=${{ secrets.ORACLE_SERVICE_NAME }}" \
-            -out=tfplan
+        run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         working-directory: ./terraform
@@ -75,7 +84,7 @@ jobs:
       - name: Get Cloud Run URL
         id: get-url
         run: |
-          URL=$(terraform -chdir=./terraform output -raw cloud_run_url)
+          URL=$(terraform -chdir=./terraform output -raw cloud_run_service_url)
           echo "Cloud Run URL: $URL"
           echo "url=$URL" >> $GITHUB_OUTPUT
 

@@ -1,19 +1,92 @@
-# main.tf
+# =============================================================================
+# Smart Chart RAG Application - Terraform Configuration
+# =============================================================================
+# This configuration provisions all infrastructure except the backend GCS bucket
+# =============================================================================
 
-provider "google" {
+# Enable required Google Cloud APIs
+resource "google_project_service" "required_apis" {
+  for_each = toset([
+    "storage.googleapis.com",           # For GCS bucket
+    "iam.googleapis.com",              # For service accounts
+    "artifactregistry.googleapis.com", # For Docker registry
+    "run.googleapis.com",              # For Cloud Run
+    "aiplatform.googleapis.com"        # For Vertex AI
+  ])
+  
   project = var.project_id
-  region  = var.region
+  service = each.value
+  
+  disable_dependent_services = false
+  disable_on_destroy         = false
 }
 
-# Artifact Registry for Docker images (already exists)
-data "google_artifact_registry_repository" "smart_chart" {
+# Create service account for deployment
+resource "google_service_account" "cloud_run_sa" {
+  account_id   = "smart-chart-deploy"
+  display_name = "Smart Chart RAG Deployment Service Account"
+  description  = "Service account for Smart Chart RAG application deployment"
+  
+  depends_on = [google_project_service.required_apis]
+}
+
+# Assign IAM roles to service account
+resource "google_project_iam_member" "storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_project_iam_member" "iam_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_project_iam_member" "artifact_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_project_iam_member" "aiplatform_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_project_iam_member" "run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_project_iam_member" "run_invoker" {
+  project = var.project_id
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+# Create Artifact Registry repository
+resource "google_artifact_registry_repository" "smart_chart" {
   location      = var.region
   repository_id = "smart-chart-repo"
-}
-
-# Use existing service account (already exists)
-data "google_service_account" "cloud_run_sa" {
-  account_id = "smart-chart-deploy"
+  description   = "Docker repository for Smart Chart RAG application"
+  format        = "DOCKER"
+  
+  depends_on = [google_project_service.required_apis]
 }
 
 # Cloud Run service
@@ -23,12 +96,13 @@ resource "google_cloud_run_service" "smart_chart" {
 
   template {
     spec {
-      service_account_name = data.google_service_account.cloud_run_sa.email
+      service_account_name = google_service_account.cloud_run_sa.email
       containers {
         image = var.container_image
         ports {
           container_port = 8080
         }
+        
         # Oracle DB connection env vars
         env {
           name  = "ORACLE_USERNAME"
@@ -50,7 +124,8 @@ resource "google_cloud_run_service" "smart_chart" {
           name  = "ORACLE_SERVICE_NAME"
           value = var.oracle_service_name
         }
-        # Google AI config
+        
+        # Google Cloud settings
         env {
           name  = "VERTEX_PROJECT_ID"
           value = var.project_id
@@ -63,27 +138,11 @@ resource "google_cloud_run_service" "smart_chart" {
           name  = "VERTEX_EMBEDDING_MODEL"
           value = "text-embedding-005"
         }
-        # App config
         env {
-          name  = "TARGET_CHUNK_SIZE"
-          value = "1500"
+          name  = "GOOGLE_APPLICATION_CREDENTIALS"
+          value = "/app/gcp_secrets/llama-sa-key.json"
         }
-        env {
-          name  = "MAX_CHUNK_SIZE"
-          value = "2000"
-        }
-        env {
-          name  = "OVERLAP_SIZE"
-          value = "200"
-        }
-        env {
-          name  = "MIN_CHUNK_SIZE"
-          value = "500"
-        }
-        env {
-          name  = "DOCUMENT_SIZE_LIMIT"
-          value = "256000"
-        }
+        
         resources {
           limits = {
             cpu    = "2000m"
@@ -93,9 +152,27 @@ resource "google_cloud_run_service" "smart_chart" {
       }
     }
   }
+  
   autogenerate_revision_name = true
+  
   traffic {
     percent         = 100
     latest_revision = true
   }
+  
+  depends_on = [
+    google_service_account.cloud_run_sa,
+    google_project_iam_member.run_developer,
+    google_project_service.required_apis
+  ]
+}
+
+# Make Cloud Run service publicly accessible
+resource "google_cloud_run_service_iam_member" "public_access" {
+  location = google_cloud_run_service.smart_chart.location
+  service  = google_cloud_run_service.smart_chart.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+  
+  depends_on = [google_cloud_run_service.smart_chart]
 }
