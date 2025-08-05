@@ -100,10 +100,42 @@ resource_exists() {
         "repository")
             gcloud artifacts repositories describe "$resource_name" --location="$REGION" >/dev/null 2>&1
             ;;
+        "api")
+            gcloud services list --enabled --filter="name:$resource_name" --format="value(name)" | grep -q "$resource_name"
+            ;;
         *)
             return 1
             ;;
     esac
+}
+
+# Function to enable Google Cloud APIs
+enable_apis() {
+    print_status "Enabling required Google Cloud APIs..."
+    
+    # All required APIs for the application
+    local apis=(
+        "storage.googleapis.com"           # For GCS bucket
+        "iam.googleapis.com"              # For service accounts
+        "artifactregistry.googleapis.com" # For Docker registry
+        "run.googleapis.com"              # For Cloud Run
+        "aiplatform.googleapis.com"       # For Vertex AI
+    )
+    
+    for api in "${apis[@]}"; do
+        print_status "Enabling API: $api"
+        
+        if resource_exists "api" "$api"; then
+            print_warning "API $api is already enabled"
+        else
+            if gcloud services enable "$api" --project="$PROJECT_ID" --quiet; then
+                print_success "Enabled API: $api"
+            else
+                print_error "Failed to enable API: $api"
+                exit 1
+            fi
+        fi
+    done
 }
 
 # Function to create GCS bucket for Terraform state
@@ -184,6 +216,28 @@ assign_iam_roles() {
     done
 }
 
+# Function to create Artifact Registry repository
+create_artifact_registry() {
+    local repo_name="smart-chart-repo"
+    
+    print_status "Creating Artifact Registry repository..."
+    
+    if resource_exists "repository" "$repo_name"; then
+        print_warning "Artifact Registry repository $repo_name already exists"
+        return 0
+    fi
+    
+    if gcloud artifacts repositories create "$repo_name" \
+        --repository-format=docker \
+        --location="$REGION" \
+        --description="Docker repository for Smart Chart RAG application"; then
+        print_success "Created Artifact Registry repository: $repo_name"
+    else
+        print_error "Failed to create Artifact Registry repository"
+        exit 1
+    fi
+}
+
 # Function to create service account key
 create_service_account_key() {
     local sa_email="smart-chart-deploy@$PROJECT_ID.iam.gserviceaccount.com"
@@ -215,7 +269,15 @@ display_summary() {
     echo "📦 Created resources:"
     echo "   • GCS Bucket: gs://smart-chart-terraform-state"
     echo "   • Service Account: smart-chart-deploy@$PROJECT_ID.iam.gserviceaccount.com"
+    echo "   • Artifact Registry: smart-chart-repo"
     echo "   • Service Account Key: smart-chart-deploy-key.json"
+    echo
+    echo "🔧 Enabled APIs:"
+    echo "   • storage.googleapis.com"
+    echo "   • iam.googleapis.com"
+    echo "   • artifactregistry.googleapis.com"
+    echo "   • run.googleapis.com"
+    echo "   • aiplatform.googleapis.com"
     echo
     echo "🔑 Assigned IAM Roles:"
     echo "   • roles/storage.objectAdmin (Terraform state management)"
@@ -265,9 +327,11 @@ main() {
     echo
     
     # Create foundational infrastructure
+    enable_apis
     create_terraform_bucket
     create_service_account
     assign_iam_roles
+    create_artifact_registry
     create_service_account_key
     
     # Display summary

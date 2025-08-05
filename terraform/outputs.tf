@@ -14,12 +14,12 @@ output "service_account_email" {
 
 output "artifact_registry_location" {
   description = "Location of the Artifact Registry repository"
-  value       = google_artifact_registry_repository.smart_chart.location
+  value       = data.google_artifact_registry_repository.smart_chart.location
 }
 
 output "artifact_registry_name" {
   description = "Name of the Artifact Registry repository"
-  value       = google_artifact_registry_repository.smart_chart.name
+  value       = data.google_artifact_registry_repository.smart_chart.name
 }
 
 output "project_id" {

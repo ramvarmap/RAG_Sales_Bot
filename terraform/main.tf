@@ -2,7 +2,7 @@
 # Smart Chart RAG Application - Terraform Configuration
 # =============================================================================
 # This configuration provisions application infrastructure
-# Service account and IAM roles are created by bootstrap script
+# APIs, service account, IAM roles, and Artifact Registry are created by bootstrap script
 # =============================================================================
 
 # Configure the Google Cloud Provider
@@ -11,38 +11,15 @@ provider "google" {
   region  = var.region
 }
 
-# Enable required Google Cloud APIs
-resource "google_project_service" "required_apis" {
-  for_each = toset([
-    "storage.googleapis.com",           # For GCS bucket
-    "iam.googleapis.com",              # For service accounts
-    "artifactregistry.googleapis.com", # For Docker registry
-    "run.googleapis.com",              # For Cloud Run
-    "aiplatform.googleapis.com"        # For Vertex AI
-  ])
-  
-  project = var.project_id
-  service = each.value
-  
-  disable_dependent_services = false
-  disable_on_destroy         = false
-}
-
 # Use existing service account (created by bootstrap script)
 data "google_service_account" "cloud_run_sa" {
   account_id = "smart-chart-deploy"
-  
-  depends_on = [google_project_service.required_apis]
 }
 
-# Create Artifact Registry repository
-resource "google_artifact_registry_repository" "smart_chart" {
+# Use existing Artifact Registry repository (created by bootstrap script)
+data "google_artifact_registry_repository" "smart_chart" {
   location      = var.region
   repository_id = "smart-chart-repo"
-  description   = "Docker repository for Smart Chart RAG application"
-  format        = "DOCKER"
-  
-  depends_on = [google_project_service.required_apis]
 }
 
 # Cloud Run service
@@ -116,10 +93,7 @@ resource "google_cloud_run_service" "smart_chart" {
     latest_revision = true
   }
   
-  depends_on = [
-    data.google_service_account.cloud_run_sa,
-    google_project_service.required_apis
-  ]
+  depends_on = [data.google_service_account.cloud_run_sa]
 }
 
 # Make Cloud Run service publicly accessible
