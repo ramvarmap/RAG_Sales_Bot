@@ -4,6 +4,12 @@
 # This configuration provisions all infrastructure except the backend GCS bucket
 # =============================================================================
 
+# Configure the Google Cloud Provider
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
 # Enable required Google Cloud APIs
 resource "google_project_service" "required_apis" {
   for_each = toset([
