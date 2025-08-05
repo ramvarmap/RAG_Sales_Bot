@@ -15,7 +15,7 @@ DB_CONFIG = {
     'username': os.getenv('ORACLE_USERNAME'),
     'password': os.getenv('ORACLE_PASSWORD'),
     'host': os.getenv('ORACLE_HOST'),
-    'port': int(os.getenv('ORACLE_PORT')),
+    'port': int(os.getenv('ORACLE_PORT', 1521)),
     'service_name': os.getenv('ORACLE_SERVICE_NAME')
 }
 
