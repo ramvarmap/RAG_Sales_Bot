@@ -1,4 +1,4 @@
-name: Build and Deploy to Cloud Run
+name: Build, Test, and Deploy to Cloud Run
 
 on:
   push:
@@ -12,9 +12,48 @@ env:
   REPOSITORY: smart-chart-repo
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v --cov=services --cov=database --cov=utils --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Run linting
+        run: |
+          pip install flake8 black
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check .
+
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r . -f json -o bandit-report.json || true
+
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+    needs: test
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,6 +78,14 @@ jobs:
         run: |
           docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/smart-chart:${{ github.sha }} .
           docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/smart-chart:latest .
+
+      - name: Test Docker image
+        run: |
+          # Test that the container starts properly
+          docker run --rm -d --name test-container $REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/smart-chart:${{ github.sha }}
+          sleep 10
+          docker logs test-container
+          docker stop test-container
 
       - name: Push Docker image
         run: |
@@ -88,6 +135,31 @@ jobs:
           echo "Cloud Run URL: $URL"
           echo "url=$URL" >> $GITHUB_OUTPUT
 
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for Cloud Run service to be ready..."
+          sleep 30
+
+      - name: Test deployment
+        run: |
+          URL="${{ steps.get-url.outputs.url }}"
+          echo "Testing deployment at: $URL"
+          
+          # Test basic connectivity
+          curl -f "$URL" || exit 1
+          
+          # Test health endpoint
+          curl -f "$URL/_stcore/health" || exit 1
+          
+          # Test that the page loads without errors
+          response=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          if [ "$response" != "200" ]; then
+            echo "❌ Deployment test failed: HTTP $response"
+            exit 1
+          fi
+          
+          echo "✅ Deployment test passed!"
+
       - name: Comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -104,7 +176,10 @@ jobs:
               **Service URL:** ${{ steps.get-url.outputs.url }}
               
               **Commit:** ${{ github.sha }}
-              **Triggered by:** ${{ github.actor }}`
+              **Triggered by:** ${{ github.actor }}
+              
+              **Tests:** ✅ All tests passed
+              **Deployment:** ✅ Successfully deployed and tested`
             })
 
       - name: Deployment Summary
@@ -112,4 +187,6 @@ jobs:
           echo "🎉 Deployment completed successfully!"
           echo "Service URL: ${{ steps.get-url.outputs.url }}"
           echo "Commit SHA: ${{ github.sha }}"
-          echo "Triggered by: ${{ github.actor }}" 
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Tests: ✅ All tests passed"
+          echo "Deployment: ✅ Successfully deployed and tested" 

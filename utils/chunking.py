@@ -7,6 +7,20 @@ Text chunking functions
 import re
 from config.settings import CHUNKING_CONFIG
 
+def create_chunks(text, target_size=None, overlap=None):
+    """
+    Create chunks from text using hybrid chunking strategy
+    Wrapper function for easier usage and testing
+    """
+    if target_size is None:
+        target_size = CHUNKING_CONFIG['target_size']
+    if overlap is None:
+        overlap = CHUNKING_CONFIG['overlap']
+    
+    max_size = CHUNKING_CONFIG['max_size']
+    
+    return hybrid_chunking(text, target_size, max_size, overlap)
+
 def hybrid_chunking(text, target_size=1500, max_size=1800, overlap=200):
     """
     Hybrid chunking strategy combining semantic and fixed-size chunking
