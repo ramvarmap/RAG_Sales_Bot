@@ -223,18 +223,13 @@ def get_document_history(connection):
             # Calculate file size in KB
             size_kb = round(total_size / 1024, 1) if total_size else 0
             
-            # Check if PDF file exists
-            pdf_path = f"analysis/{doc_name}"
-            pdf_available = "✅ Available" if os.path.exists(pdf_path) else "❌ Missing"
-            
             documents.append({
                 'id': doc_id,
                 'name': doc_name,
                 'chunks': total_chunks,
                 'size_kb': size_kb,
                 'status': status,
-                'created_date': created_date,
-                'pdf_available': pdf_available
+                'created_date': created_date
             })
         
         return documents

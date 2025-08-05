@@ -156,7 +156,7 @@ DOCUMENT_SIZE_LIMIT=256000
 ```bash
 # Create necessary directories
 mkdir -p secrets
-mkdir -p analysis
+# No additional directories needed
 mkdir -p testing
 ```
 
@@ -233,7 +233,7 @@ smart-chart/
 ├── secrets/                    # Service account keys (not in repo)
 │   └── llama-sa-key.json
 │
-├── analysis/                   # PDF storage directory
+# Removed analysis/ directory - not needed for stateless Cloud Run deployment
 │   └── *.pdf
 │
 └── testing/                    # Test files

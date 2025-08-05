@@ -263,8 +263,8 @@ def process_pdf_upload():
                     total_chunks_sum = sum(doc['chunks'] for doc in documents)
                     st.metric("🧩 Total Chunks", total_chunks_sum)
                 with col4:
-                    available_files = sum(1 for doc in documents if "Available" in doc['pdf_available'])
-                    st.metric("📄 Available Files", available_files)
+                    total_size_mb = sum(doc['size_kb'] for doc in documents) / 1024
+                    st.metric("📊 Total Size", f"{total_size_mb:.1f} MB")
                 
                 # Show recent uploads
                 if len(documents) > 0:

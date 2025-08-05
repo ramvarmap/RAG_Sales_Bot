@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p gcp_secrets analysis
+RUN mkdir -p gcp_secrets
 
 # Expose port 8080 (Cloud Run requirement)
 EXPOSE 8080

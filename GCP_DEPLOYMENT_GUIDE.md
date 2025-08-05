@@ -27,6 +27,15 @@ Terraform Infrastructure → Deploy to Cloud Run
 Smart Chart RAG Application (Streamlit + Oracle DB + Vertex AI)
 ```
 
+## 🔧 Key Authentication Changes
+
+**Important**: The application has been updated to use **Application Default Credentials (ADC)** in Cloud Run environments, which is the recommended and secure approach for GCP applications.
+
+### Authentication Strategy:
+- **Cloud Run/GCP Environment**: Uses `google.auth.default()` (ADC)
+- **Local Development**: Uses service account key file (`gcp_secrets/llama-sa-key.json`)
+- **Automatic Detection**: The app detects the environment and chooses the appropriate authentication method
+
 ## 🚀 Step-by-Step Deployment
 
 ### Step 1: Clone and Prepare Repository
@@ -90,6 +99,11 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/storage.admin"
 
+# CRITICAL: Add Vertex AI access role
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/aiplatform.user"
+
 # Create and download service account key
 gcloud iam service-accounts keys create ~/smart-chart-sa-key.json \
     --iam-account=${SA_EMAIL}
@@ -108,9 +122,22 @@ gsutil mb -l us-central1 gs://smart-chart-terraform-state
 gsutil ls gs://smart-chart-terraform-state
 ```
 
-### Step 5: Set Up GitHub Repository
+### Step 5: Create Artifact Registry Repository
 
-#### 5.1 Create GitHub Repository
+```bash
+# Create Artifact Registry repository for Docker images
+gcloud artifacts repositories create smart-chart-repo \
+    --repository-format=docker \
+    --location=us-central1 \
+    --description="Docker repository for Smart Chart RAG application"
+
+# Verify repository creation
+gcloud artifacts repositories list --location=us-central1
+```
+
+### Step 6: Set Up GitHub Repository
+
+#### 6.1 Create GitHub Repository
 
 1. Go to GitHub and create a new repository
 2. Push your code to the repository:
@@ -129,7 +156,7 @@ git checkout -b testing
 git push -u origin testing
 ```
 
-#### 5.2 Set Up GitHub Secrets
+#### 6.2 Set Up GitHub Secrets
 
 1. Go to your GitHub repository
 2. Click **Settings** → **Secrets and variables** → **Actions**
@@ -150,9 +177,9 @@ Add these secrets:
 **For GCP_SA_KEY:**
 Copy the entire content of the `~/smart-chart-sa-key.json` file.
 
-### Step 6: Configure Oracle Database
+### Step 7: Configure Oracle Database
 
-#### 6.1 Ensure Oracle Database is Accessible
+#### 7.1 Ensure Oracle Database is Accessible
 
 Make sure your Oracle 23c AI database:
 - Is running and accessible from the internet
@@ -160,7 +187,7 @@ Make sure your Oracle 23c AI database:
 - Has a user with appropriate permissions
 - Is accessible from Cloud Run's IP ranges
 
-#### 6.2 Test Database Connection
+#### 7.2 Test Database Connection
 
 ```bash
 # Test database connectivity (replace with your actual values)
@@ -170,9 +197,9 @@ print('Database Config:', {k: v if k != 'password' else '***' for k, v in DB_CON
 "
 ```
 
-### Step 7: Deploy Using GitHub Actions
+### Step 8: Deploy Using GitHub Actions
 
-#### 7.1 Trigger Deployment
+#### 8.1 Trigger Deployment
 
 ```bash
 # Push to testing branch to trigger deployment
@@ -181,7 +208,7 @@ git commit -m "Deploy to Cloud Run"
 git push origin testing
 ```
 
-#### 7.2 Monitor Deployment
+#### 8.2 Monitor Deployment
 
 1. Go to your GitHub repository
 2. Click **Actions** tab
@@ -190,19 +217,32 @@ git push origin testing
 
 **Expected Workflow Steps:**
 1. ✅ Checkout code
-2. ✅ Set up Cloud SDK
-3. ✅ Configure Docker
-4. ✅ Build Docker image
-5. ✅ Push to Artifact Registry
-6. ✅ Setup Terraform
-7. ✅ Terraform Init
-8. ✅ Terraform Plan
-9. ✅ Terraform Apply
-10. ✅ Get Cloud Run URL
+2. ✅ Google Auth (using google-github-actions/auth@v2)
+3. ✅ Set up Cloud SDK
+4. ✅ Configure Docker
+5. ✅ Build Docker image
+6. ✅ Push to Artifact Registry
+7. ✅ Setup Terraform
+8. ✅ Terraform Init
+9. ✅ Terraform Plan
+10. ✅ Terraform Apply
+11. ✅ Get Cloud Run URL
 
-### Step 8: Verify Deployment
+### Step 9: Make Cloud Run Service Public
 
-#### 8.1 Check Cloud Run Service
+After successful deployment, make the service publicly accessible:
+
+```bash
+# Make Cloud Run service publicly invokable
+gcloud run services add-iam-policy-binding smart-chart-rag \
+    --region=us-central1 \
+    --member="allUsers" \
+    --role="roles/run.invoker"
+```
+
+### Step 10: Verify Deployment
+
+#### 10.1 Check Cloud Run Service
 
 ```bash
 # List Cloud Run services
@@ -215,17 +255,18 @@ gcloud run services describe smart-chart-rag --region=us-central1
 gcloud run services logs read smart-chart-rag --region=us-central1 --limit=50
 ```
 
-#### 8.2 Access Your Application
+#### 10.2 Access Your Application
 
 1. Copy the Cloud Run URL from GitHub Actions output
 2. Open the URL in your browser
 3. You should see your Smart Chart RAG application
 
-#### 8.3 Test Application Features
+#### 10.3 Test Application Features
 
 - ✅ Upload a PDF document
 - ✅ Chat with the AI about the document
 - ✅ Verify database connectivity
+- ✅ Test embedding generation
 
 ## 🔧 Manual Deployment (Alternative)
 
@@ -287,6 +328,54 @@ terraform output cloud_run_url
 ## 🐛 Troubleshooting
 
 ### Common Issues and Solutions
+
+#### Issue: "Failed to generate embeddings!" Error
+
+**Root Cause**: Application trying to read service account key file in Cloud Run
+**Solution**: The authentication code has been updated to use ADC in Cloud Run environments
+
+**Check**: Verify the `services/auth.py` file uses the updated authentication logic:
+
+```python
+# Check if we're running in Cloud Run or GCP environment
+is_cloud_run = (
+    os.getenv('K_SERVICE') or  # Cloud Run
+    os.getenv('K_REVISION') or  # Cloud Run
+    os.getenv('GOOGLE_CLOUD_PROJECT') or  # GCP environment
+    os.getenv('GCP_PROJECT')  # Alternative GCP project env var
+)
+
+if is_cloud_run:
+    # Use Application Default Credentials in Cloud Run/GCP
+    credentials, project = default(scopes=scopes)
+else:
+    # Local development - use service account file
+    credentials = service_account.Credentials.from_service_account_file(
+        credentials_path, scopes=scopes)
+```
+
+#### Issue: "Permission denied for aiplatform.endpoints.predict"
+
+**Root Cause**: Service account missing Vertex AI permissions
+**Solution**: Add the `roles/aiplatform.user` role to the service account
+
+```bash
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:smart-chart-deploy@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="roles/aiplatform.user"
+```
+
+#### Issue: "Forbidden Your client does not have permission to get URL"
+
+**Root Cause**: Cloud Run service not publicly accessible
+**Solution**: Make the service publicly invokable
+
+```bash
+gcloud run services add-iam-policy-binding smart-chart-rag \
+    --region=us-central1 \
+    --member="allUsers" \
+    --role="roles/run.invoker"
+```
 
 #### Issue: Terraform state bucket not found
 
@@ -352,6 +441,9 @@ gcloud run services list --region=us-central1
 
 # View recent logs
 gcloud run services logs read smart-chart-rag --region=us-central1 --limit=50
+
+# Check authentication in Cloud Run
+gcloud run services logs read smart-chart-rag --region=us-central1 --filter="textPayload:\"Using Application Default Credentials\""
 ```
 
 ## 📊 Monitoring and Maintenance
@@ -364,6 +456,9 @@ gcloud run services describe smart-chart-rag --region=us-central1
 
 # Check service logs
 gcloud run services logs read smart-chart-rag --region=us-central1
+
+# Check authentication logs
+gcloud run services logs read smart-chart-rag --region=us-central1 --filter="textPayload:\"Access token generated successfully\""
 ```
 
 ### Update Application
@@ -412,6 +507,7 @@ gsutil rm -r gs://smart-chart-terraform-state
 3. **Network**: Ensure Oracle database is properly secured
 4. **Access Control**: Consider setting up IAM policies for Cloud Run access
 5. **HTTPS**: Cloud Run automatically provides HTTPS endpoints
+6. **Authentication**: Uses Application Default Credentials (ADC) in Cloud Run - no service account keys in containers
 
 ## 📝 Environment Variables
 
@@ -433,6 +529,26 @@ The application uses these environment variables (set via Terraform):
 | `MIN_CHUNK_SIZE` | Minimum chunk size | 500 |
 | `DOCUMENT_SIZE_LIMIT` | Maximum PDF size | 256000 |
 
+## 🔧 Authentication Architecture
+
+### Cloud Run Environment
+- **Method**: Application Default Credentials (ADC)
+- **Service Account**: `smart-chart-deploy@project-id.iam.gserviceaccount.com`
+- **Required Roles**: `roles/aiplatform.user`, `roles/run.admin`, `roles/artifactregistry.admin`
+- **Security**: No service account keys stored in containers
+
+### Local Development
+- **Method**: Service account key file
+- **Location**: `gcp_secrets/llama-sa-key.json`
+- **Fallback**: ADC if key file not found
+
+### Environment Detection
+The application automatically detects the environment using these variables:
+- `K_SERVICE` (Cloud Run)
+- `K_REVISION` (Cloud Run)
+- `GOOGLE_CLOUD_PROJECT` (GCP environment)
+- `GCP_PROJECT` (Alternative GCP project env var)
+
 ## 🎉 Success Indicators
 
 Your deployment is successful when:
@@ -442,6 +558,8 @@ Your deployment is successful when:
 - ✅ Application URL is accessible
 - ✅ You can upload PDFs and chat with the AI
 - ✅ Database operations work correctly
+- ✅ Embedding generation works without errors
+- ✅ Authentication logs show "Using Application Default Credentials for Cloud Run"
 
 ## 📞 Support
 
@@ -452,6 +570,8 @@ If you encounter issues:
 3. Verify all prerequisites are met
 4. Ensure GCP project has billing enabled
 5. Check Oracle database connectivity
+6. Verify service account has `roles/aiplatform.user` role
+7. Check authentication logs for ADC usage
 
 ---
 
