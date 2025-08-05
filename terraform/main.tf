@@ -85,6 +85,14 @@ resource "google_project_iam_member" "run_invoker" {
   depends_on = [google_service_account.cloud_run_sa]
 }
 
+resource "google_project_iam_member" "service_usage_admin" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
 # Create Artifact Registry repository
 resource "google_artifact_registry_repository" "smart_chart" {
   location      = var.region
