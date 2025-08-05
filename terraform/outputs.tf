@@ -9,7 +9,7 @@ output "cloud_run_service_url" {
 
 output "service_account_email" {
   description = "Email of the service account used by Cloud Run"
-  value       = google_service_account.cloud_run_sa.email
+  value       = data.google_service_account.cloud_run_sa.email
 }
 
 output "artifact_registry_location" {

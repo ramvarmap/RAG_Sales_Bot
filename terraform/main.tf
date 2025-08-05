@@ -1,7 +1,8 @@
 # =============================================================================
 # Smart Chart RAG Application - Terraform Configuration
 # =============================================================================
-# This configuration provisions all infrastructure except the backend GCS bucket
+# This configuration provisions application infrastructure
+# Service account and IAM roles are created by bootstrap script
 # =============================================================================
 
 # Configure the Google Cloud Provider
@@ -27,70 +28,11 @@ resource "google_project_service" "required_apis" {
   disable_on_destroy         = false
 }
 
-# Create service account for deployment
-resource "google_service_account" "cloud_run_sa" {
-  account_id   = "smart-chart-deploy"
-  display_name = "Smart Chart RAG Deployment Service Account"
-  description  = "Service account for Smart Chart RAG application deployment"
+# Use existing service account (created by bootstrap script)
+data "google_service_account" "cloud_run_sa" {
+  account_id = "smart-chart-deploy"
   
   depends_on = [google_project_service.required_apis]
-}
-
-# Assign IAM roles to service account
-resource "google_project_iam_member" "storage_admin" {
-  project = var.project_id
-  role    = "roles/storage.objectAdmin"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "iam_user" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "artifact_writer" {
-  project = var.project_id
-  role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "aiplatform_user" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "run_developer" {
-  project = var.project_id
-  role    = "roles/run.developer"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "run_invoker" {
-  project = var.project_id
-  role    = "roles/run.invoker"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
-}
-
-resource "google_project_iam_member" "service_usage_admin" {
-  project = var.project_id
-  role    = "roles/serviceusage.serviceUsageAdmin"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-  
-  depends_on = [google_service_account.cloud_run_sa]
 }
 
 # Create Artifact Registry repository
@@ -110,7 +52,7 @@ resource "google_cloud_run_service" "smart_chart" {
 
   template {
     spec {
-      service_account_name = google_service_account.cloud_run_sa.email
+      service_account_name = data.google_service_account.cloud_run_sa.email
       containers {
         image = var.container_image
         ports {
@@ -175,8 +117,7 @@ resource "google_cloud_run_service" "smart_chart" {
   }
   
   depends_on = [
-    google_service_account.cloud_run_sa,
-    google_project_iam_member.run_developer,
+    data.google_service_account.cloud_run_sa,
     google_project_service.required_apis
   ]
 }
